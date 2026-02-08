@@ -1,7 +1,7 @@
 import {
   ConflictException,
   Injectable,
-  Res,
+  NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from '@/prisma/prisma.service';
@@ -11,7 +11,7 @@ import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import { Request, Response } from 'express';
 import { RegisterDto } from './dto/register.dto';
-import { ITokens } from './interfaces/token.interface';
+import { IPayload, ITokens } from './interfaces/token.interface';
 
 @Injectable()
 export class AuthService {
@@ -65,6 +65,57 @@ export class AuthService {
     }
 
     return this.generateTokens(exitUser.id);
+  }
+
+  async refresh(refreshToken: string) {
+    if (!refreshToken) {
+      throw new UnauthorizedException('Недествительный refresh token');
+    }
+
+    let payload: IPayload;
+
+    try {
+      payload = await this.jwtService.verifyAsync(refreshToken, {
+        secret: this.configService.getOrThrow('JWT_REFRESH_SECRET'),
+      });
+    } catch (e) {
+      throw new UnauthorizedException('Refresh token истёк или недействителен');
+    }
+
+    if (payload) {
+      const user = await this.prisma.user.findUnique({
+        where: {
+          id: payload.sub,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (!user) {
+        throw new UnauthorizedException('Недействительный refresh token');
+      }
+
+      return this.generateTokens(user.id);
+    }
+  }
+
+  async validate(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        id: true,
+        name: true
+      }
+    });
+
+    if (!user) {
+      throw new NotFoundException('Нет такого пользователя')
+    }
+
+    return user
   }
 
   async generateTokens(userId: string): Promise<ITokens> {
