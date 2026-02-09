@@ -1,12 +1,10 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import { GqlExecutionContext } from '@nestjs/graphql';
+import { Request } from 'express';
 import { User } from 'generated/prisma/client';
 
 export const Authorized = createParamDecorator(
   (data: keyof User, context: ExecutionContext) => {
-     const ctx = GqlExecutionContext.create(context);
-     
-    const req = ctx.getContext().req;
+    const req = context.switchToHttp().getRequest() as Request;
 
     const user = req.user;
 
